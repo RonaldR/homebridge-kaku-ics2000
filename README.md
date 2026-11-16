@@ -29,8 +29,11 @@ In addition, there are a few optional options:
 - `localBackupAddress` - A backup IP-address that will be used if the IP-address of your ICS-2000 can't be found
   automatically.
 - `dimmerDebounceTime` - Milliseconds to wait after the last brightness change from HomeKit before a dimmer receives a
-  command (default `500`). Only the final brightness is sent, so dragging the brightness slider doesn't flood the dimmer.
+  command (default `250`). Only the final brightness is sent, so dragging the brightness slider doesn't flood the dimmer.
   Turning a dimmer on or off isn't delayed. Increase this if your dimmers still go into dim mode while using the slider.
+- `commandInterval` - Milliseconds between two commands to the ICS-2000 (default `250`). The ICS-2000 loses commands it
+  receives at the same time, so when a scene or automation switches several devices, the commands are sent one by one.
+  Increase this if some devices still don't respond, decrease it if the devices switch on too slowly one after another.
 - `deviceConfigOverrides` - An object containing override or additional configs. The key is the device type, the value an object according to the [DeviceConfig interface](https://github.com/youridijk/ICS-2000-NodeJS/blob/main/src/kaku/model/DeviceConfig.ts).
 
 An example config.json with those keys:

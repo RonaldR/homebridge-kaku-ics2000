@@ -46,11 +46,8 @@ export default class LightBulb {
       const currentState = this.service.getCharacteristic(this.platform.Characteristic.On).value;
 
       // Only send a command to the ics-2000 if the state is changed
-      // The is necessary, otherwise dimming a light doesn't work because HomeKit sends an on command and a dim command at the same time
-      // And the ics-2000 can't handle multiple messages received at the same time
       if (newState !== currentState) {
-        // await this.hub.turnDeviceOnOff(this.deviceId, newValue as boolean, this.onOffCharacteristicFunction, this.isGroup, true);
-        await this.device.turnOnOff(newValue as boolean, true);
+        await this.platform.queueCommand(() => this.device.turnOnOff(newState, true));
         this.platform.logger.debug(`Changed state to ${newValue} on ${this.deviceName}`);
       }
     } catch (e) {

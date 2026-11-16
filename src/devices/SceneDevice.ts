@@ -25,7 +25,7 @@ export default class SceneDevice extends OneFunctionSwitch {
   protected async onSet() {
     await super.onSet();
     try {
-      await this.scene.run();
+      await this.platform.queueCommand(() => this.scene.run());
     } catch (e) {
       this.platform.logger.error(`Error running scene with name ${this.name}: ${e}`);
     }

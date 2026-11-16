@@ -8,6 +8,10 @@ import schedule from 'node-schedule';
 import ColorTemperatureLightBulb from './devices/ColorTemperatureLightBulb';
 import SceneDevice from './devices/SceneDevice';
 import type {Config} from './types';
+import {setTimeout as sleep} from 'node:timers/promises';
+
+// The ics-2000 confirms every command, but a lost confirmation shouldn't hold up the queue for the 10 second timeout of the library
+const COMMAND_TIMEOUT = 2_000;
 
 export default class KAKUPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
@@ -17,6 +21,9 @@ export default class KAKUPlatform implements DynamicPlatformPlugin {
   private registeredDeviceIds: number[] = [];
   public readonly discoverMessage?: string;
   private readonly RESTServer?: RESTServer;
+  private readonly commandInterval: number;
+  // Commands to all devices are chained, because the ics-2000 loses commands it receives at the same time
+  private commandQueue: Promise<void> = Promise.resolve();
 
   constructor(
     public readonly logger: Logger,
@@ -51,6 +58,7 @@ export default class KAKUPlatform implements DynamicPlatformPlugin {
       this.logger.info(`Device config overrides contains ${keyCount} device types`);
     }
 
+    this.commandInterval = config.commandInterval ?? 250;
     this.discoverMessage = config.discoverMessage;
 
     if (this.discoverMessage) {
@@ -106,6 +114,25 @@ export default class KAKUPlatform implements DynamicPlatformPlugin {
       .catch((error) => this.logger.error(`Error discovering devices: ${error}`));
     await this.hub.getAllDeviceStatuses()
       .catch((error) => this.logger.error(`Error fetching device statuses: ${error}`));
+  }
+
+  /**
+   * Send a command to the ics-2000 after the commands queued before it. A command is sent once the previous one is confirmed
+   * by the ics-2000 (or after COMMAND_TIMEOUT) and commandInterval has passed, like the KAKU app turns on the lights in a scene one by one.
+   * When the queue is empty, the command is sent right away
+   * @param command A function that sends the command
+   * @returns The result of the command, rejected when the command fails
+   */
+  public queueCommand<T>(command: () => Promise<T> | null): Promise<T | null> {
+    const result = this.commandQueue.then(command);
+
+    this.commandQueue = this.commandQueue
+      .then(() => Promise.race([result, sleep(COMMAND_TIMEOUT, undefined, {ref: false})]))
+      // Errors are handled by the caller through the returned promise
+      .catch(() => undefined)
+      .then(() => sleep(this.commandInterval, undefined, {ref: false}));
+
+    return result;
   }
 
   configureAccessory(accessory: PlatformAccessory): void {

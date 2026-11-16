@@ -2,10 +2,6 @@ import LightBulb from './LightBulb';
 import KAKUPlatform from '../KAKUPlatform';
 import {CharacteristicValue, HAPStatus, PlatformAccessory} from 'homebridge';
 import {DimDevice} from 'ics-2000';
-import {setTimeout as sleep} from 'node:timers/promises';
-
-// Minimum time between two commands to the same dimmer, so the ics-2000 can finish transmitting the previous one
-const COMMAND_INTERVAL = 500;
 // HomeKit sends a brightness change in the same request as an on/off change, so an on/off change only waits this long for it
 const ON_OFF_DELAY = 50;
 
@@ -20,8 +16,6 @@ export default class DimmableLightBulb extends LightBulb {
   // The on state before the pending changes, so an on/off command is only sent if the state actually changes
   private previousOn = false;
   private debounceTimer?: NodeJS.Timeout;
-  // Commands for this device are chained, so they are never sent at the same time
-  private commandQueue: Promise<void> = Promise.resolve();
 
   constructor(
     platform: KAKUPlatform,
@@ -41,7 +35,7 @@ export default class DimmableLightBulb extends LightBulb {
     // })
     ;
     this.maxBrightness = this.device.deviceConfig.maxBrightness ?? 255;
-    this.debounceTime = this.platform.config.dimmerDebounceTime ?? 500;
+    this.debounceTime = this.platform.config.dimmerDebounceTime ?? 250;
   }
 
   private convertToRange(value: number, currentMax: number, newMax: number) {
@@ -101,25 +95,18 @@ export default class DimmableLightBulb extends LightBulb {
       // A KAKU dimmer turns on with a dim command, so no on command is sent with it. If the light was turned on without HomeKit
       // knowing it, that on command would put the dimmer in the mode where you set the brightness with a switch
       const dimLevel = Math.round(this.convertToRange(pendingBrightness, 100, this.maxBrightness));
-      this.queueCommand(`changing brightness to ${dimLevel}`, async () => {
-        await this.device.dim(dimLevel, true);
-      }, revertOn);
+      this.queueCommand(`changing brightness to ${dimLevel}`, () => this.device.dim(dimLevel, true), revertOn);
     } else if (pendingOn !== undefined && pendingOn !== previousOn) {
       this.queueCommand(`changing state to ${pendingOn}`, () => this.device.turnOnOff(pendingOn, true), revertOn);
     }
   }
 
-  private queueCommand(description: string, command: () => Promise<void>, onError?: () => void) {
-    this.commandQueue = this.commandQueue.then(async () => {
-      try {
-        await command();
-        this.logger.debug(`Done ${description} on ${this.deviceName}`);
-      } catch (e) {
+  private queueCommand(description: string, command: () => Promise<void> | null, onError?: () => void) {
+    this.platform.queueCommand(command)
+      .then(() => this.logger.debug(`Done ${description} on ${this.deviceName}`))
+      .catch((e) => {
         this.logger.error(`Error ${description} for ${this.deviceName}: ${e}`);
         onError?.();
-      }
-
-      await sleep(COMMAND_INTERVAL);
-    });
+      });
   }
 }

@@ -12,4 +12,5 @@ export interface Config extends PlatformConfig {
   startRESTServer?: boolean;
   RESTServerPort?: number;
   dimmerDebounceTime?: number;
+  commandInterval?: number;
 }

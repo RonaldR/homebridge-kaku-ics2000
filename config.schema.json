@@ -59,7 +59,14 @@
         "title": "Milliseconds to wait after the last brightness change before sending it to a dimmer. Increase this if your dimmers go into dim mode while using the slider",
         "type": "integer",
         "required": false,
-        "default": 500,
+        "default": 250,
+        "minimum": 0
+      },
+      "commandInterval": {
+        "title": "Milliseconds to wait between two commands to the ICS-2000. Increase this if some lights don't respond when several lights are switched at once",
+        "type": "integer",
+        "required": false,
+        "default": 250,
         "minimum": 0
       }
     }
